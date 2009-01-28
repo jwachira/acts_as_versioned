@@ -211,7 +211,11 @@ module ActiveRecord #:nodoc:
             before_save  :set_new_version
             after_save   :save_version
             after_save   :clear_old_versions
-
+            
+            def version_at(date)
+              self.versions.existing_at(date).first
+            end
+            
             unless options[:if_changed].nil?
               self.track_altered_attributes = true
               options[:if_changed] = [options[:if_changed]] unless options[:if_changed].is_a?(Array)
@@ -225,6 +229,11 @@ module ActiveRecord #:nodoc:
           const_set(versioned_class_name, Class.new(ActiveRecord::Base)).class_eval do
             def self.reloadable? ; false ; end
             # find first version before the given version
+            
+            named_scope :existing_at, lambda { |date|
+              {:conditions => ["versioned_at <= ? AND version_expired_at > ?", date, date]}
+            }
+            
             def self.before(version)
               find :first, :order => 'version desc',
                 :conditions => ["#{original_class.versioned_foreign_key} = ? and version < ?", version.send(original_class.versioned_foreign_key), version.version]
@@ -330,11 +339,23 @@ module ActiveRecord #:nodoc:
           self.class.versioned_columns.each do |col|
             new_model.send("#{col.name}=", orig_model.send(col.name)) if orig_model.has_attribute?(col.name)
           end
-
+          
           if orig_model.is_a?(self.class.versioned_class)
             new_model[new_model.class.inheritance_column] = orig_model[self.class.versioned_inheritance_column]
           elsif new_model.is_a?(self.class.versioned_class)
             new_model[self.class.versioned_inheritance_column] = orig_model[orig_model.class.inheritance_column]
+            
+            now = Time.now
+            new_model.versioned_at = now
+            
+            # some of the test version tables don't have a version column, which is weird
+            if new_model.class.column_names.include?('version') && orig_model.versions.last
+              prev_version = orig_model.versions.last
+              prev_version.version_expired_at = now
+              prev_version.save!
+            end
+            
+            true # callback needs to return true
           end
         end
 
@@ -414,6 +435,8 @@ module ActiveRecord #:nodoc:
             self.connection.create_table(versioned_table_name, create_table_options) do |t|
               t.column versioned_foreign_key, :integer
               t.column version_column, :integer
+              t.column :versioned_at,       :datetime
+              t.column :version_expired_at, :datetime
             end
 
             self.versioned_columns.each do |col| 

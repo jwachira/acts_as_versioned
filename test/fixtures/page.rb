@@ -40,4 +40,5 @@ end
 
 class Author < ActiveRecord::Base
   has_many :pages
+  has_many :page_versions, :through => :pages, :source => :versions
 end
