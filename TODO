@@ -1,0 +1,48 @@
+TODO
+    documentation
+    handle nil version_expired_at
+    look up activerecord created_at magic
+    clean up test so that it works without ugly check for `version` column (see acts_as_versioned.rb:352)
+    has_many_versioned class method (that sets up has_many :through, eg for author model)
+    create_first_versions (for migration to create the initial versions)
+
+SOMEDAY MAYBE...
+
+    class Page
+      acts_as_versioned
+    end
+
+    # should generate...
+
+    class Page
+      # normal acts_as_versioned stuff, plus:
+  
+      def version_at(date)
+         PageVersionProxy.new(self,date)
+      end
+    end
+
+    # the normal version model, as well as this proxy class
+    class PageVersionProxy
+      def initialize(page, date)
+        @page = page
+        @date = date
+    
+        # fetch the correct page_version record, just like we currently implement
+        @page_version = @page.versions.existing_at(date)
+      end
+  
+      # but when associations are called on this proxy, wrap the results in another proxy
+      def method_missing(method_name, *opts)
+        if PageVersion.association_names.include?(method_name)
+          association_name = method_name
+          association_class = ???
+          if versioned?(association_class)
+            get_version_proxy_class(association_class).new(@page_version.send(association_name), date)
+          end
+        else
+          # non-associations just get delegated to the page_version object
+          @page_version.send(method_name,opts)
+        end
+      end
+    end

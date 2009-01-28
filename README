@@ -1,28 +1,22 @@
-= acts_as_versioned
+= wested/acts_as_versioned
 
-This library adds simple versioning to an ActiveRecord module.  ActiveRecord is required.
+This library expands acts_as_versioned to always track the datetime the
+version was created (versioned_at) and the datetime that that version was no 
+longer current (version_expired_at).
 
-== Resources
+An `existing_at(datetime)` named scope is added to the version models, making
+it possible to do fancy things like scope, or apply to associations:
 
-Install
+    pages = author.page_versions.existing_at(datetime)
 
-* gem install acts_as_versioned
+Additionally, a simple accessor is created in the versioned model:
 
-Rubyforge project
+   page.version_at(datetime)
 
-* http://rubyforge.org/projects/ar-versioned
+See the TODO file for the immediate next steps, as well as a thought about
+a potentially nice approach for doing things like
 
-RDocs
+    @author.version_at(datetime).pages
 
-* http://ar-versioned.rubyforge.org
-
-Subversion
-
-* http://techno-weenie.net/svn/projects/acts_as_versioned
-
-Collaboa
-
-* http://collaboa.techno-weenie.net/repository/browse/acts_as_versioned
-
-Special thanks to Dreamer on ##rubyonrails for help in early testing.  His ServerSideWiki (http://serversidewiki.com) 
-was the first project to use acts_as_versioned <em>in the wild</em>.
+and having the pages that are returned be the page versions that existed at
+datetime.
