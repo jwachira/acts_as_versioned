@@ -29,7 +29,11 @@ module ActiveRecord #:nodoc:
     # your container for the changes to be reflected. In development mode this usually means restarting WEBrick.
     #
     #   class Page < ActiveRecord::Base
-    #     # assumes pages_versions table
+    #     # assumes 
+          # Page has integer version
+          # page_versions table duplicating all columns of pages, 
+          # + datetime versioned_at and version_expired_at columns
+          # + integer page_id 
     #     acts_as_versioned
     #   end
     #
@@ -273,19 +277,31 @@ module ActiveRecord #:nodoc:
         def self.included(base) # :nodoc:
           base.extend ClassMethods
         end
+        
+        def newly_versioned=(value=false)
+          @newly_versioned = value
+        end
+        
+        def newly_versioned?
+          @newly_versioned || false
+        end
 
         # Saves a version of the model in the versioned table.  This is called in the after_save callback by default
         def save_version
           if @saving_version
             @saving_version = nil
-            rev = self.class.versioned_class.new
-            clone_versioned_model(self, rev)
-            rev.send("#{self.class.version_column}=", send(self.class.version_column))
-            rev.send("#{self.class.versioned_foreign_key}=", id)
-            rev.save
+            save_version!
           end
         end
-
+        
+        def save_version!
+          rev = self.class.versioned_class.new
+          clone_versioned_model(self, rev)
+          rev.send("#{self.class.version_column}=", send(self.class.version_column))
+          rev.send("#{self.class.versioned_foreign_key}=", id)
+          rev.save
+        end
+        
         # Clears old revisions if a limit is set with the :limit option in <tt>acts_as_versioned</tt>.
         # Override this method to set your own criteria for clearing old versions.
         def clear_old_versions
@@ -331,7 +347,7 @@ module ActiveRecord #:nodoc:
         end
         
         def altered?
-          track_altered_attributes ? (version_if_changed - changed).length < version_if_changed.length : changed?
+          track_altered_attributes ? (version_if_changed - changed).length < version_if_changed.length : changed? || newly_versioned?
         end
 
         # Clones a model.  Used when saving a new version or reverting a model's version.
@@ -368,6 +384,8 @@ module ActiveRecord #:nodoc:
         # custom version condition checking.
         def version_condition_met?
           case
+          when newly_versioned?
+            true
           when version_condition.is_a?(Symbol)
             send(version_condition)
           when version_condition.respond_to?(:call) && (version_condition.arity == 1 || version_condition.arity == -1)
@@ -402,7 +420,7 @@ module ActiveRecord #:nodoc:
         protected
           # sets the new version before saving, unless you're using optimistic locking.  In that case, let it take care of the version.
           def set_new_version
-            @saving_version = new_record? || save_version?
+            @saving_version = new_record? || save_version?  
             self.send("#{self.class.version_column}=", next_version) if new_record? || (!locking_enabled? && save_version?)
           end
 
@@ -458,6 +476,14 @@ module ActiveRecord #:nodoc:
             self.connection.add_index versioned_table_name, versioned_foreign_key
           end
 
+          # Rake migration task to populate the versioned table
+          def populate_versioned_table
+            all.each do |record|
+              record.newly_versioned = true
+              record.save
+            end
+          end
+          
           # Rake migration task to drop the versioned table
           def drop_versioned_table
             self.connection.drop_table versioned_table_name

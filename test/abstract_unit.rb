@@ -46,3 +46,12 @@ class Test::Unit::TestCase #:nodoc:
 
   # Add more helper methods to be used by all tests here...
 end
+
+class DateTime
+  def ==(other)
+    p self, other
+    self.to_s(:rfc822) == other.to_s(:rfc822)
+  end
+end  
+  
+    

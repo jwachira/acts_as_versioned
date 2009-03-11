@@ -5,27 +5,31 @@ if ActiveRecord::Base.connection.supports_migrations?
     attr_accessor :version
     acts_as_versioned
   end
+  
+  class Gadget < ActiveRecord::Base
+    def self.add_acts_as_versioned
+      self.acts_as_versioned
+    end
+  end
+  
+  class GadgetVersion < ActiveRecord::Base
+  end
 
   class MigrationTest < Test::Unit::TestCase
     self.use_transactional_fixtures = false
-    def teardown
-      if ActiveRecord::Base.connection.respond_to?(:initialize_schema_information)
-        ActiveRecord::Base.connection.initialize_schema_information
-        ActiveRecord::Base.connection.update "UPDATE schema_info SET version = 0"
-      else
-        ActiveRecord::Base.connection.initialize_schema_migrations_table
-        ActiveRecord::Base.connection.assume_migrated_upto_version(0)
+
+    def setup
+      begin
+        ActiveRecord::Migrator.down(File.dirname(__FILE__) + '/fixtures/migrations/',0)
+      rescue
+        nil
       end
-      
-      Thing.connection.drop_table "things" rescue nil
-      # Thing.connection.drop_table "thing_versions" rescue nil
-      Thing.reset_column_information
     end
         
     def test_versioned_migration
       assert_raises(ActiveRecord::StatementInvalid) { Thing.create :title => 'blah blah' }
       # take 'er up
-      ActiveRecord::Migrator.up(File.dirname(__FILE__) + '/fixtures/migrations/')
+      ActiveRecord::Migrator.up(File.dirname(__FILE__) + '/fixtures/migrations/',1)
       t = Thing.create :title => 'blah blah', :price => 123.45, :type => 'Thing'
       assert_equal 1, t.versions.size
       
@@ -45,6 +49,29 @@ if ActiveRecord::Base.connection.supports_migrations?
       # now lets take 'er back down
       ActiveRecord::Migrator.down(File.dirname(__FILE__) + '/fixtures/migrations/')
       assert_raises(ActiveRecord::StatementInvalid) { Thing.create :title => 'blah blah' }
+    end
+    
+    def test_migrate_data_to_version_table
+      # Create an unversioned record
+      ActiveRecord::Migrator.up(File.dirname(__FILE__) + '/fixtures/migrations/',2)
+      g = Gadget.create! :title => "The first gadget!"
+      assert_raises(NoMethodError) {g.version}
+
+      # Change it to versioned
+      Gadget.add_acts_as_versioned
+      Gadget.drop_versioned_table rescue nil
+      Gadget.create_versioned_table
+      g.reload
+      assert_nothing_raised {g.version}
+      assert_equal 0, g.versions.size
+
+      # Create versioned data for it
+      Gadget.populate_versioned_table
+      g.reload()
+      assert_equal 1, g.versions.size
+      
+      # Make sure the version is updated on the object
+      assert_equal g.versions.last.id, g.version
     end
   end
 end

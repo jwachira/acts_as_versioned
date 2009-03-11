@@ -244,6 +244,15 @@ class VersionedTest < Test::Unit::TestCase
     assert_equal 2, p.versions(true).size # version 1 deleted
   end
   
+  def test_should_save_version!
+    p = Page.new :title => "title"
+    p.save_without_revision
+    assert_equal 0, p.versions.size
+    p.save_version!
+    p.reload
+    assert_equal 1, p.versions.size
+  end
+  
   def test_find_versions
     assert_equal 1, locked_pages(:welcome).versions.find(:all, :conditions => ['title LIKE ?', '%weblog%']).size
   end
@@ -354,14 +363,14 @@ class VersionedTest < Test::Unit::TestCase
     p = pages(:welcome)
     p.title = 'update me'
     p.save!
-    assert_equal Time.now.to_s, p.versions.latest.versioned_at.to_s
+    assert_equal DateTime.now, p.versions.latest.versioned_at
   end
   
   def test_should_stamp_versioned_at_with_current_time
     p = pages(:welcome)
     p.title = 'update me'
     p.save!
-    assert_equal Time.now.to_s, p.versions.latest.versioned_at.to_s
+    assert_equal DateTime.now, p.versions.latest.versioned_at
   end
   
   def test_should_stamp_version_expired_at_of_previous_version_with_current_time
@@ -369,16 +378,27 @@ class VersionedTest < Test::Unit::TestCase
     p.title = 'updated'
     p.save!
     previous_version = p.versions.last
-    previous_version_time = Time.now
+    previous_version_time = DateTime.now
     sleep(1)
     p.title = 'updated again'
     p.save!
     current_version = p.versions.last
     
-    assert_equal Time.now.to_s, previous_version.reload.version_expired_at.to_s, "Previous version should now have version_expired_at #{previous_version.id} #{current_version.id} #{current_version.page_id}"
+    assert_equal DateTime.now, previous_version.reload.version_expired_at, "Previous version should now have version_expired_at #{previous_version.id} #{current_version.id} #{current_version.page_id}"
     assert_equal nil, current_version.version_expired_at, "Current version should not have version_expired_at"
     assert_equal previous_version, p.versions.existing_at(previous_version_time).first
     assert_equal previous_version, p.version_at(previous_version_time)
+  end
+  
+  def test_should_delete_version_after_version_expired_at_date
+    p = pages(:welcome)
+    p.title = 'force update'
+    p.save!
+    version = p.versions.first    
+    version.version_expired_at = 3.minutes.ago
+    version.save!
+
+    # assert_nil p.revert_to(version)
   end
   
   def test_associations
@@ -387,7 +407,7 @@ class VersionedTest < Test::Unit::TestCase
     new_page.title = "initial title"
     new_page.save!
     
-    before_page_updates = Time.now
+    before_page_updates = DateTime.now
     sleep 1
     
     saved_page_versions = []
