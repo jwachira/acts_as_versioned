@@ -172,9 +172,11 @@ module ActiveRecord #:nodoc:
 
           send :include, ActiveRecord::Acts::Versioned::ActMethods
 
-          cattr_accessor :versioned_class_name, :versioned_foreign_key, :versioned_table_name, :versioned_inheritance_column, 
-            :version_column, :max_version_limit, :track_altered_attributes, :version_condition, :version_sequence_name, :non_versioned_columns,
-            :version_association_options, :version_if_changed
+          cattr_accessor :versioned_class_name, :versioned_foreign_key, :versioned_table_name, 
+            :versioned_inheritance_column, :version_column, :version_expired_at_column, 
+            :versioned_at_column, :max_version_limit, :track_altered_attributes, :version_condition, 
+            :version_sequence_name, :non_versioned_columns, :version_association_options, 
+            :version_if_changed
 
           self.versioned_class_name         = options[:class_name]  || "Version"
           self.versioned_foreign_key        = options[:foreign_key] || self.to_s.foreign_key
@@ -182,15 +184,18 @@ module ActiveRecord #:nodoc:
           self.versioned_inheritance_column = options[:inheritance_column] || "versioned_#{inheritance_column}"
           self.version_column               = options[:version_column]     || 'version'
           self.version_sequence_name        = options[:sequence_name]
+          self.version_expired_at_column    = options[:version_expired_column] || 'version_expired_at'
+          self.versioned_at_column          = options[:versioned_at_column] || 'versioned_at'
           self.max_version_limit            = options[:limit].to_i
           self.version_condition            = options[:if] || true
           self.non_versioned_columns        = [self.primary_key, inheritance_column, self.version_column, 'lock_version', versioned_inheritance_column, 'created_at', 'created_on'] + options[:non_versioned_columns].to_a.map(&:to_s)
-          self.version_association_options  = {
-                                                :class_name  => "#{self.to_s}::#{versioned_class_name}",
+          self.version_association_options  = { :class_name  => "#{self.to_s}::#{versioned_class_name}",
                                                 :foreign_key => versioned_foreign_key,
                                                 :dependent   => :delete_all
                                               }.merge(options[:association_options] || {})
 
+          self.version_association_options.delete(:dependent) if options[:remove_dependent_delete]
+                                              
           if block_given?
             extension_module_name = "#{versioned_class_name}Extension"
             silence_warnings do
@@ -212,12 +217,18 @@ module ActiveRecord #:nodoc:
                 @latest ||= find(:first, :order => '#{version_column} desc')
               end
             end
+                        
             before_save  :set_new_version
             after_save   :save_version
             after_save   :clear_old_versions
+            before_destroy :expire_current_version
             
             def version_at(date)
               self.versions.existing_at(date).first
+            end
+            
+            def self.versioned?
+              true
             end
             
             unless options[:if_changed].nil?
@@ -231,13 +242,26 @@ module ActiveRecord #:nodoc:
 
           # create the dynamic versioned model
           const_set(versioned_class_name, Class.new(ActiveRecord::Base)).class_eval do
-            def self.reloadable? ; false ; end
-            # find first version before the given version
             
-            named_scope :existing_at, lambda { |date|
-              {:conditions => ["versioned_at <= ? AND version_expired_at > ?", date, date]}
+            named_scope :existing_before, lambda { |date|
+              { :conditions => ["#{original_class.versioned_at_column} <= ? or #{original_class.versioned_at_column} is NULL", date] }
             }
             
+            named_scope :expired_after, lambda { |date|
+              { :conditions => ["#{original_class.version_expired_at_column} > ? or #{original_class.version_expired_at_column} is NULL", date] }
+            }
+
+            # # Someday, compose this scope from the two above
+            #          named_scope :existing_at, lambda { |date|
+            #            {:conditions => ["(#{original_class.versioned_at_column} <= ? or #{original_class.versioned_at_column} is NULL) and (#{original_class.version_expired_at_column} > ? or #{original_class.version_expired_at_column} is NULL)", date, date] }
+            #          }
+            def self.current_at(date)
+              self.existing_before(date).expired_after(date)
+            end
+            
+            def self.reloadable? ; false ; end
+            
+            # find first version before the given version
             def self.before(version)
               find :first, :order => 'version desc',
                 :conditions => ["#{original_class.versioned_foreign_key} = ? and version < ?", version.send(original_class.versioned_foreign_key), version.version]
@@ -286,6 +310,12 @@ module ActiveRecord #:nodoc:
           @newly_versioned || false
         end
 
+        def expire_current_version
+          current_version = versions.select{|v| v.version == version }.first
+          current_version.version_expired_at = Time.now
+          current_version.save!
+        end
+        
         # Saves a version of the model in the versioned table.  This is called in the after_save callback by default
         def save_version
           if @saving_version
@@ -476,12 +506,14 @@ module ActiveRecord #:nodoc:
             self.connection.add_index versioned_table_name, versioned_foreign_key
           end
 
-          # Rake migration task to populate the versioned table
+          # Rake migration task to populate the versioned table and initialize version column
           def populate_versioned_table
             all.each do |record|
-              record.newly_versioned = true
-              record.save
+              # record.newly_versioned = true
+              record.save_version!
             end
+            self.connection.update("update #{table_name} set #{version_column} = '1'")
+            
           end
           
           # Rake migration task to drop the versioned table

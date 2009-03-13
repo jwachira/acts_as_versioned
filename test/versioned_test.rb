@@ -390,17 +390,31 @@ class VersionedTest < Test::Unit::TestCase
     assert_equal previous_version, p.version_at(previous_version_time)
   end
   
-  def test_should_delete_version_after_version_expired_at_date
+  def test_should_find_records_existing_at_a_particular_time
     p = pages(:welcome)
-    p.title = 'force update'
-    p.save!
-    version = p.versions.first    
-    version.version_expired_at = 3.minutes.ago
-    version.save!
+    n_original_versions = p.versions.size
 
-    # assert_nil p.revert_to(version)
+    original_time = DateTime.now
+    %w[update1 update2 update3].each do |t|
+      p.title = t
+      p.save
+      sleep 1
+    end
+    time = DateTime.now
+    n_versions_at_time = p.versions.count
+    version_id_at_time = p.version
+    %w[update4 update5 update6].each do |t|
+      sleep 1
+      p.title = t
+      p.save
+    end
+
+    assert_equal 6, p.versions.size - n_original_versions
+            
+    assert_equal version_id_at_time, p.version_at(time).version
+    
   end
-  
+    
   def test_associations
     author = authors(:mly)
     new_page = author.pages.build
