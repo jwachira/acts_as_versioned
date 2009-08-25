@@ -251,6 +251,10 @@ module ActiveRecord #:nodoc:
               { :conditions => ["#{original_class.version_expired_at_column} > ? or #{original_class.version_expired_at_column} is NULL", date] }
             }
 
+            named_scope :tagged_expired_after, lambda { |date|
+              { :conditions => ["#{original_class.version_expired_at_column} > ?", date] }
+              
+            }
             # # Someday, compose this scope from the two above
             #          named_scope :existing_at, lambda { |date|
             #            {:conditions => ["(#{original_class.versioned_at_column} <= ? or #{original_class.versioned_at_column} is NULL) and (#{original_class.version_expired_at_column} > ? or #{original_class.version_expired_at_column} is NULL)", date, date] }
@@ -324,7 +328,7 @@ module ActiveRecord #:nodoc:
           end
         end
         
-        def save_version!
+        def save_version!          
           rev = self.class.versioned_class.new
           clone_versioned_model(self, rev)
           rev.send("#{self.class.version_column}=", send(self.class.version_column))
