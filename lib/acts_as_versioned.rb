@@ -1,3 +1,4 @@
+=begin
 # Copyright (c) 2005 Rick Olson
 # 
 # Permission is hereby granted, free of charge, to any person obtaining
@@ -18,6 +19,7 @@
 # LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+=end
 
 module ActiveRecord #:nodoc:
   module Acts #:nodoc:
@@ -25,8 +27,9 @@ module ActiveRecord #:nodoc:
     # versioned table ready and that your model has a version field.  This works with optimistic locking if the lock_version
     # column is present as well.
     #
-    # The class for the versioned model is derived the first time it is seen. Therefore, if you change your database schema you have to restart
-    # your container for the changes to be reflected. In development mode this usually means restarting WEBrick.
+    # The class for the versioned model is derived the first time it is seen. Therefore, if you change your database schema 
+    # you have to restart your container for the changes to be reflected. In development mode this usually means restarting 
+    # WEBrick.
     #
     #   class Page < ActiveRecord::Base
     #     # assumes 
@@ -80,12 +83,15 @@ module ActiveRecord #:nodoc:
         #
         # * <tt>class_name</tt> - versioned model class name (default: PageVersion in the above example)
         # * <tt>table_name</tt> - versioned model table name (default: page_versions in the above example)
-        # * <tt>foreign_key</tt> - foreign key used to relate the versioned model to the original model (default: page_id in the above example)
-        # * <tt>inheritance_column</tt> - name of the column to save the model's inheritance_column value for STI.  (default: versioned_type)
+        # * <tt>foreign_key</tt> - foreign key used to relate the versioned model to the original model 
+        #     (default: page_id in the above example)
+        # * <tt>inheritance_column</tt> - name of the column to save the model's inheritance_column value for STI.  
+        #     (default: versioned_type)
         # * <tt>version_column</tt> - name of the column in the model that keeps the version number (default: version)
         # * <tt>sequence_name</tt> - name of the custom sequence to be used by the versioned model.
         # * <tt>limit</tt> - number of revisions to keep, defaults to unlimited
-        # * <tt>if</tt> - symbol of method to check before saving a new version.  If this method returns false, a new version is not saved.
+        # * <tt>if</tt> - symbol of method to check before saving a new version.  If this method returns false, a 
+        #     new version is not saved.
         #   For finer control, pass either a Proc or modify Model#version_condition_met?
         #
         #     acts_as_versioned :if => Proc.new { |auction| !auction.expired? }
@@ -98,11 +104,11 @@ module ActiveRecord #:nodoc:
         #       end
         #     end
         #
-        # * <tt>if_changed</tt> - Simple way of specifying attributes that are required to be changed before saving a model.  This takes
-        #   either a symbol or array of symbols.
+        # * <tt>if_changed</tt> - Simple way of specifying attributes that are required to be changed before saving a model.
+        #     This takes either a symbol or array of symbols.
         #
-        # * <tt>extend</tt> - Lets you specify a module to be mixed in both the original and versioned models.  You can also just pass a block
-        #   to create an anonymous mixin:
+        # * <tt>extend</tt> - Lets you specify a module to be mixed in both the original and versioned models.  You can also 
+        #     just pass a block to create an anonymous mixin:
         #
         #     class Auction
         #       acts_as_versioned do
@@ -218,10 +224,10 @@ module ActiveRecord #:nodoc:
               end
             end
                         
-            before_save  :set_new_version
-            after_save   :save_version
-            after_save   :clear_old_versions
-            before_destroy :expire_current_version
+            before_save     :set_new_version
+            after_save      :save_version
+            after_save      :clear_old_versions
+            before_destroy  :expire_current_version
             
             def version_at(date)
               self.versions.existing_at(date).first
@@ -230,6 +236,13 @@ module ActiveRecord #:nodoc:
             def self.versioned?
               true
             end
+            
+            def self.each_changed(start_time,end_time=nil)
+              Version.tagged_expired_after(start_time).all.each do |item|
+                yield item
+              end
+            end
+            
             
             unless options[:if_changed].nil?
               self.track_altered_attributes = true
@@ -262,7 +275,7 @@ module ActiveRecord #:nodoc:
             def self.current_at(date)
               self.existing_before(date).expired_after(date)
             end
-            
+                        
             def self.reloadable? ; false ; end
             
             # find first version before the given version
@@ -288,6 +301,7 @@ module ActiveRecord #:nodoc:
             def versions_count
               page.version
             end
+                        
           end
 
           versioned_class.cattr_accessor :original_class
@@ -305,7 +319,7 @@ module ActiveRecord #:nodoc:
         def self.included(base) # :nodoc:
           base.extend ClassMethods
         end
-        
+                
         def newly_versioned=(value=false)
           @newly_versioned = value
         end
@@ -560,6 +574,7 @@ module ActiveRecord #:nodoc:
             ActiveRecord::Base.lock_optimistically = true if current
             result
           end
+          
         end
       end
     end
