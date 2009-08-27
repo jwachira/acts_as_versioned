@@ -246,6 +246,11 @@ module ActiveRecord #:nodoc:
               results
             end
             
+            def self.changed_ids(start_time,end_time=nil)
+              expired = expired_in_interval(start_time,end_time)
+              expired_ids = expired.map(&:#{versioned_foreign_key})
+            end
+
             unless options[:if_changed].nil?
               self.track_altered_attributes = true
               options[:if_changed] = [options[:if_changed]] unless options[:if_changed].is_a?(Array)
