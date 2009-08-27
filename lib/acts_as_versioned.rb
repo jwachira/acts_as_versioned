@@ -248,7 +248,7 @@ module ActiveRecord #:nodoc:
             
             def self.changed_ids(start_time,end_time=nil)
               expired = expired_in_interval(start_time,end_time)
-              expired_ids = expired.map(&:#{versioned_foreign_key})
+              expired_ids = expired.map(&:#{versioned_foreign_key}).uniq
             end
 
             unless options[:if_changed].nil?
