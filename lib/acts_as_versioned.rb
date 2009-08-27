@@ -237,12 +237,14 @@ module ActiveRecord #:nodoc:
               true
             end
             
-            def self.each_changed(start_time,end_time=nil)
-              Version.tagged_expired_after(start_time).all.each do |item|
-                yield item
-              end
+            def self.expired_in_interval(start_time,end_time=nil)
+              results = if end_time
+                Version.tagged_expired_after(start_time).tagged_expired_before(end_time)
+              else
+                Version.tagged_expired_after(start_time)
+              end              
+              results
             end
-            
             
             unless options[:if_changed].nil?
               self.track_altered_attributes = true
@@ -260,14 +262,20 @@ module ActiveRecord #:nodoc:
               { :conditions => ["#{original_class.versioned_at_column} <= ? or #{original_class.versioned_at_column} is NULL", date] }
             }
             
-            named_scope :expired_after, lambda { |date|
+            named_scope :expired_after, lambda { |datetime|
               { :conditions => ["#{original_class.version_expired_at_column} > ? or #{original_class.version_expired_at_column} is NULL", date] }
             }
 
-            named_scope :tagged_expired_after, lambda { |date|
-              { :conditions => ["#{original_class.version_expired_at_column} > ?", date] }
+            named_scope :tagged_expired_after, lambda { |datetime|
+              { :conditions => ["#{original_class.version_expired_at_column} > ?", datetime] }
               
             }
+            
+            named_scope :tagged_expired_before, lambda { |datetime|
+              { :conditions => ["#{original_class.version_expired_at_column} < ?", datetime] }
+              
+            }
+            
             # # Someday, compose this scope from the two above
             #          named_scope :existing_at, lambda { |date|
             #            {:conditions => ["(#{original_class.versioned_at_column} <= ? or #{original_class.versioned_at_column} is NULL) and (#{original_class.version_expired_at_column} > ? or #{original_class.version_expired_at_column} is NULL)", date, date] }
