@@ -230,7 +230,7 @@ module ActiveRecord #:nodoc:
             before_destroy  :expire_current_version
             
             def version_at(date)
-              self.versions.existing_at(date).first
+              self.versions.current_at(date).first
             end
             
             def self.versioned?
@@ -263,12 +263,12 @@ module ActiveRecord #:nodoc:
           # create the dynamic versioned model
           const_set(versioned_class_name, Class.new(ActiveRecord::Base)).class_eval do
             
-            named_scope :existing_before, lambda { |date|
-              { :conditions => ["#{original_class.versioned_at_column} <= ? or #{original_class.versioned_at_column} is NULL", date] }
+            named_scope :existing_before, lambda { |datetime|
+              { :conditions => ["#{original_class.versioned_at_column} <= ? or #{original_class.versioned_at_column} is NULL", datetime] }
             }
             
             named_scope :expired_after, lambda { |datetime|
-              { :conditions => ["#{original_class.version_expired_at_column} > ? or #{original_class.version_expired_at_column} is NULL", date] }
+              { :conditions => ["#{original_class.version_expired_at_column} > ? or #{original_class.version_expired_at_column} is NULL", datetime] }
             }
 
             named_scope :tagged_expired_after, lambda { |datetime|
@@ -285,8 +285,8 @@ module ActiveRecord #:nodoc:
             #          named_scope :existing_at, lambda { |date|
             #            {:conditions => ["(#{original_class.versioned_at_column} <= ? or #{original_class.versioned_at_column} is NULL) and (#{original_class.version_expired_at_column} > ? or #{original_class.version_expired_at_column} is NULL)", date, date] }
             #          }
-            def self.current_at(date)
-              self.existing_before(date).expired_after(date)
+            def self.current_at(datetime)
+              self.existing_before(datetime).expired_after(datetime)
             end
                         
             def self.reloadable? ; false ; end
