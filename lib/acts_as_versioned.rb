@@ -342,9 +342,10 @@ module ActiveRecord #:nodoc:
         end
 
         def expire_current_version
-          current_version = versions.select{|v| v.version == version }.first
-          current_version.version_expired_at = Time.now
-          current_version.save!
+          if current_version = versions.select{|v| v.version == version }.first
+            current_version.version_expired_at = Time.now
+            current_version.save!
+          end
         end
         
         # Saves a version of the model in the versioned table.  This is called in the after_save callback by default
