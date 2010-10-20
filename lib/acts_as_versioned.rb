@@ -506,7 +506,7 @@ module ActiveRecord #:nodoc:
           def create_versioned_table(create_table_options = {})
             # create version column in main table if it does not exist
             if !self.content_columns.find { |c| [version_column.to_s, 'lock_version'].include? c.name }
-              self.connection.add_column table_name, version_column, :integer
+              self.connection.add_column table_name, version_column, :integer, :default => 0
               self.reset_column_information
             end
 
